@@ -11,8 +11,7 @@
 - 混淆与还原各一个按钮，结果导出无损 PNG
 - 混淆后再还原会在状态栏提示「✓ 与原图逐像素一致」，方便自查
 - 深色模式、手机宽度适配、参数自动记忆（localStorage）
-- 渐进式单列工具流（放入 → 参数 → 处理 → 结果）
-- 无构建、无后端、无 JS 第三方依赖：改完文件刷新即可（可选加载 Google Fonts）
+- 无构建、无后端、无第三方依赖：改完文件刷新即可
 
 ## 快速开始
 
@@ -26,9 +25,9 @@ python3 -m http.server 8080
 ## 文件结构
 
 ```
-index.html      页面结构（自包含页头页脚，渐进式工具流）
-base.css        设计令牌、氛围背景、品牌区、页脚
-tool.css        工具流样式（拖放区、参数、按钮、对比区）
+index.html      页面结构（分区更清楚：放入 → 参数 → 处理 → 结果）
+base.css        站点基础样式（深色模式变量、标题、页脚）
+tool.css        本页样式（拖放区、参数、按钮、对比区）
 algo.js         算法核心：纯函数，不碰 DOM，Node 里也能直接 require
 app.js          页面交互：读图、画布、状态、下载
 tests/          回归测试（Python 参考实现 + Node 比对）
@@ -92,7 +91,7 @@ npm test          # 等价于 bash tests/verify.sh
 
 子路径部署（当前线上就是这样）：把本目录文件放到 `/var/www/tools/hunxiao/`，站点 root 指向 `/var/www/tools` 即可，nginx 片段见 `deploy/nginx-example.conf`。
 
-纯静态，没有进程要重启。改完前端后把 `index.html` 里 `base.css` / `tool.css` / `algo.js` / `app.js` 的 `?v=` 一起升版本号，避免浏览器吃旧缓存。
+纯静态，没有进程要重启。改完前端后把 `index.html` 里四处 `?v=`（`base.css`、`tool.css`、`algo.js`、`app.js`）一起升版本号，避免浏览器吃旧缓存。
 
 ## 已知限制
 

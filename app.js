@@ -80,7 +80,6 @@
   }
 
   function syncDropLabel(hasImage, fileName) {
-    els.drop.classList.toggle('has-image', !!hasImage);
     const strong = els.drop.querySelector('strong');
     const span = els.drop.querySelector('span');
     if (!strong || !span) return;
@@ -88,8 +87,8 @@
       strong.textContent = fileName ? ('已载入 ' + fileName) : '已载入图片';
       span.textContent = '可继续换图：拖入、点选或粘贴';
     } else {
-      strong.textContent = '拖到这里，或点击选择';
-      span.textContent = '也支持 Ctrl / ⌘ + V 粘贴截图';
+      strong.textContent = '把图片拖到这里';
+      span.textContent = '也可以点击选择，或按 Ctrl / ⌘ + V 粘贴截图';
     }
   }
 
