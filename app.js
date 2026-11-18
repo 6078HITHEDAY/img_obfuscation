@@ -226,10 +226,32 @@
       els.res.height = 0;
       els.metaRes.textContent = '';
 
+      // 末行可逆标识：有则自动填入方式（及能写入的种子）
+      let markerNote = '';
+      if (typeof ImgObf !== 'undefined' && ImgObf.inspect) {
+        const info = ImgObf.inspect(data, w, h);
+        if (info && info.mode) {
+          els.mode.value = info.mode;
+          applyModeUi();
+          if (info.hasSeed) {
+            els.seed.value = info.seed;
+            if (info.mode === 'tomato' && !/^\d{4}$/.test(els.seed.value)) els.seed.value = '0000';
+          }
+          saveParams();
+          markerNote = info.hasSeed
+            ? '检测到混淆标识，已自动填入方式与密码。'
+            : '检测到混淆标识，已自动填入方式（密码需手动确认）。';
+        }
+      }
+
       syncDropLabel(true, label);
       syncActions();
-      setStatus('已载入 ' + label + '（' + w + '×' + h + '）。选好方式与密码后点「混淆」。');
-      els.obf.focus();
+      setStatus(
+        markerNote
+          ? ('已载入 ' + label + '（' + w + '×' + h + '）。' + markerNote + '可直接点「还原」。')
+          : ('已载入 ' + label + '（' + w + '×' + h + '）。选好方式与密码后点「混淆」。')
+      );
+      (markerNote ? els.rest : els.obf).focus();
     } catch (e) {
       console.error(e);
       setStatus('读取失败：' + (e && e.message ? e.message : e), 'err');
