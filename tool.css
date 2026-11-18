@@ -78,6 +78,22 @@ body { max-width: 960px; }
 .panel select:disabled, .panel input:disabled { opacity: .55; cursor: default; }
 .hint { font-size: .8rem; color: var(--text-faint); margin-bottom: 0; min-height: 1.2em; }
 
+.check {
+	display: flex;
+	align-items: flex-start;
+	gap: .45rem;
+	font-size: .85rem;
+	color: var(--text-muted);
+	margin: .15rem 0 .55rem;
+	cursor: pointer;
+	user-select: none;
+}
+.check input {
+	margin-top: .2rem;
+	flex-shrink: 0;
+}
+.check[hidden] { display: none !important; }
+
 /* 按钮 */
 .actions { display: flex; flex-wrap: wrap; gap: .7rem; margin-bottom: 0.65rem; }
 button.act {

@@ -19,8 +19,8 @@
   const MARKER_MAGIC1 = 0x4F; // O
   const MARKER_MAGIC2 = 0x42; // B
   const MARKER_MAGIC3 = 0x46; // F
-  const MARKER_VERSION = 1;
-  const MARKER_MIN_WIDTH = 4; // 无种子时至少 12 字节 → 4 像素
+  const MARKER_VERSION = 2; // v2：只存模式，不存种子/密码
+  const MARKER_MIN_WIDTH = 4; // 固定头 12 字节 → 4 像素
   const MODE_ID = { tomato: 1, serpentine: 2, blocks: 3, rows: 4, xor: 5 };
   const ID_MODE = ['', 'tomato', 'serpentine', 'blocks', 'rows', 'xor'];
 
@@ -75,78 +75,36 @@
     return (c ^ 0xFFFFFFFF) >>> 0;
   }
 
-  function utf8Encode(str) {
-    if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(str);
-    // 极简回退（覆盖 BMP 常用字符）
-    const out = [];
-    for (let i = 0; i < str.length; i++) {
-      let c = str.charCodeAt(i);
-      if (c < 0x80) out.push(c);
-      else if (c < 0x800) out.push(0xC0 | (c >> 6), 0x80 | (c & 63));
-      else out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
-    }
-    return new Uint8Array(out);
-  }
-
-  function utf8Decode(bytes) {
-    if (typeof TextDecoder !== 'undefined') return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-    let s = '';
-    for (let i = 0; i < bytes.length; ) {
-      const c = bytes[i++];
-      if (c < 0x80) s += String.fromCharCode(c);
-      else if ((c & 0xE0) === 0xC0) s += String.fromCharCode(((c & 31) << 6) | (bytes[i++] & 63));
-      else {
-        s += String.fromCharCode(((c & 15) << 12) | ((bytes[i++] & 63) << 6) | (bytes[i++] & 63));
-      }
-    }
-    return s;
-  }
-
   /* ---------- 可逆标识（末行） ----------
    *
    * 位置：图像最底部一整行（y = height-1），不改动上方任何混淆像素。
    * 编码：每个像素 RGB 各存 1 字节，A 固定 255（PNG 无损可往返）。
    *
-   * 字节布局：
+   * 字节布局（v2，不存种子/密码）：
    *   0..3   magic = "IOBF"
-   *   4      version = 1
+   *   4      version = 2
    *   5      modeId  = 1..5（tomato/serpentine/blocks/rows/xor）
-   *   6      flags   bit0=含种子
-   *   7      seedLen
-   *   8..    seed UTF-8（可因行宽截断；截断时 flags.bit0=0）
-   *   末 4B  CRC32（覆盖此前全部字节，小端）
+   *   6      flags   = 0（保留）
+   *   7      reserved = 0
+   *   8..11  CRC32（覆盖前 8 字节，小端）
    *
-   * 容量：一行最多 floor(width*3) 字节；无种子最少 12 字节（宽≥4）。
-   * 加密默认写入（opts.marker !== false）；与原版小番茄逐字节互通时请传 marker:false。
+   * 仍可读 v1（曾含明文种子）：校验通过后只返回 mode，忽略种子字段。
+   * 加密默认写入（opts.marker !== false）；兼容原版小番茄时传 marker:false。
    */
 
-  function buildMarkerPayload(mode, seed, maxBytes) {
+  function buildMarkerPayload(mode, maxBytes) {
     const modeId = MODE_ID[mode];
     if (!modeId) return null;
-    // header(8) + crc(4) = 12；剩余给种子
-    const overhead = 12;
-    if (maxBytes < overhead) return null;
+    const bodyLen = 8;
+    if (maxBytes < bodyLen + 4) return null;
 
-    let seedBytes = utf8Encode(seed == null ? '' : String(seed));
-    const maxSeed = maxBytes - overhead;
-    let flags = 0;
-    if (seedBytes.length > 0 && maxSeed > 0) {
-      if (seedBytes.length > maxSeed) seedBytes = seedBytes.subarray(0, 0); // 放不下则不写种子，仍写模式
-      else flags |= 1;
-    } else {
-      seedBytes = new Uint8Array(0);
-    }
-    if (!(flags & 1)) seedBytes = new Uint8Array(0);
-
-    const bodyLen = 8 + seedBytes.length;
     const buf = new Uint8Array(bodyLen + 4);
     buf[0] = MARKER_MAGIC0; buf[1] = MARKER_MAGIC1;
     buf[2] = MARKER_MAGIC2; buf[3] = MARKER_MAGIC3;
     buf[4] = MARKER_VERSION;
     buf[5] = modeId;
-    buf[6] = flags;
-    buf[7] = seedBytes.length;
-    buf.set(seedBytes, 8);
+    buf[6] = 0;
+    buf[7] = 0;
     const c = crc32(buf, bodyLen);
     buf[bodyLen] = c & 255;
     buf[bodyLen + 1] = (c >>> 8) & 255;
@@ -169,30 +127,31 @@
     }
     if (packed[0] !== MARKER_MAGIC0 || packed[1] !== MARKER_MAGIC1 ||
         packed[2] !== MARKER_MAGIC2 || packed[3] !== MARKER_MAGIC3) return null;
-    if (packed[4] !== MARKER_VERSION) return null;
+    const version = packed[4];
+    if (version !== 1 && version !== 2) return null;
     const modeId = packed[5];
     const mode = ID_MODE[modeId];
     if (!mode) return null;
-    const flags = packed[6];
-    const seedLen = packed[7];
-    if (seedLen > 200) return null;
-    const bodyLen = 8 + seedLen;
+
+    let bodyLen = 8;
+    if (version === 1) {
+      const seedLen = packed[7];
+      if (seedLen > 200) return null;
+      bodyLen = 8 + seedLen;
+    }
     if (bodyLen + 4 > maxBytes) return null;
     const expect = crc32(packed, bodyLen);
     const got = packed[bodyLen] | (packed[bodyLen + 1] << 8) |
       (packed[bodyLen + 2] << 16) | (packed[bodyLen + 3] << 24);
     if ((expect >>> 0) !== (got >>> 0)) return null;
 
-    let seed = '';
-    if ((flags & 1) && seedLen > 0) {
-      seed = utf8Decode(packed.subarray(8, 8 + seedLen));
-    }
-    return { mode: mode, seed: seed, version: MARKER_VERSION, hasSeed: !!(flags & 1) };
+    // 安全：永不向调用方暴露图内种子（即使是旧版 v1）
+    return { mode: mode, version: version };
   }
 
-  function appendMarker(data, w, h, mode, seed) {
+  function appendMarker(data, w, h, mode) {
     if (w < MARKER_MIN_WIDTH) return { data: data, width: w, height: h, marked: false };
-    const payload = buildMarkerPayload(mode, seed, w * 3);
+    const payload = buildMarkerPayload(mode, w * 3);
     if (!payload) return { data: data, width: w, height: h, marked: false };
 
     const out = new Uint8ClampedArray(w * (h + 1) * 4);
@@ -548,17 +507,12 @@
       if (detected) mode = detected.mode;
       else throw new Error('未指定混淆方式，且图片中没有可识别的标识');
     }
-    // 解密且调用方未给种子时，可用标识里的种子
-    if (dir === 'decrypt' && detected && detected.hasSeed && (opts.seed == null || opts.seed === '')) {
-      seed = detected.seed;
-    }
-
     let out = runMode(mode, data, w, h, seed, dir);
 
-    // 加密默认写入标识；与原版小番茄互通时传 marker:false
+    // 加密默认写入标识（仅模式）；兼容原版小番茄时传 marker:false
     const wantMarker = opts.marker !== false;
     if (dir === 'encrypt' && wantMarker) {
-      out = appendMarker(out.data, out.width, out.height, mode, seed);
+      out = appendMarker(out.data, out.width, out.height, mode);
     }
 
     if (detected) out.marker = detected;

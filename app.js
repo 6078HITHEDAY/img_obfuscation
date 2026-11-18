@@ -9,6 +9,7 @@
   const $ = (id) => document.getElementById(id);
   const els = {
     drop: $('drop'), file: $('file'), mode: $('mode'), seed: $('seed'), hint: $('hint'),
+    compatLegacy: $('compat-legacy'), compatWrap: $('compat-wrap'),
     obf: $('btn-obf'), rest: $('btn-rest'), reset: $('btn-reset'),
     status: $('status'), resultStage: $('result-stage'), compare: $('compare'),
     orig: $('cv-orig'), res: $('cv-res'),
@@ -18,10 +19,11 @@
 
   const state = {
     name: '',      // 原始文件名（不含扩展名）
-    src: null,     // { data, w, h } 载入的原图
+    src: null,     // { data, w, h } 载入的图（可能是密图）
     cur: null,     // { data, w, h } 下一次操作的对象（可能是上一次的结果）
     result: null,  // { data, w, h, blob, url, mode, dir }
-    fileLabel: ''
+    fileLabel: '',
+    loadedMarker: null // 载入时 inspect 到的标识（仅 mode，无种子）
   };
 
   const busy = { value: false };
@@ -52,6 +54,7 @@
     els.reset.disabled = isBusy;
     els.mode.disabled = isBusy;
     els.seed.disabled = isBusy;
+    if (els.compatLegacy) els.compatLegacy.disabled = isBusy;
     els.file.disabled = isBusy;
 
     els.obf.title = !hasImage ? '请先放入图片' : (isBusy ? '正在处理…' : '按当前方式与密码混淆');
@@ -130,8 +133,8 @@
   /* ---------- 参数提示 / 记忆 ---------- */
 
   const HINTS = {
-    tomato: '小番茄密码为 4 位数字：前两位迭代轮数，第 3 位右侧填充列，第 4 位下侧填充行。默认 0000，与原版小番茄互通。',
-    serpentine: '任意文字作种子；留空使用默认参数。只保证本工具往返一致。',
+    tomato: '小番茄密码为 4 位数字：前两位迭代轮数，第 3 位右侧填充列，第 4 位下侧填充行。默认会写末行标识；若要与原版小番茄工具互通，请勾选「兼容原版」。',
+    serpentine: '任意文字作种子；留空使用默认参数。默认写入末行标识（只含模式，不含密码）。',
     blocks: '任意文字作种子；留空使用默认参数。32×32 分块重排并随机旋转。',
     rows: '任意文字作种子；留空使用默认参数。逐行、逐列循环错位。',
     xor: '任意文字作种子；留空使用默认参数。必须用同一个种子才能还原。'
@@ -140,6 +143,7 @@
   function applyModeUi() {
     const mode = els.mode.value;
     els.hint.textContent = HINTS[mode] || '';
+    if (els.compatWrap) els.compatWrap.hidden = mode !== 'tomato';
     if (mode === 'tomato') {
       els.seed.maxLength = 4;
       els.seed.setAttribute('inputmode', 'numeric');
@@ -156,6 +160,14 @@
   function saveParams() {
     localStorage.setItem('imgobf.mode', els.mode.value);
     localStorage.setItem('imgobf.seed.' + els.mode.value, els.seed.value);
+    if (els.compatLegacy) {
+      localStorage.setItem('imgobf.compatLegacy', els.compatLegacy.checked ? '1' : '0');
+    }
+  }
+
+  function wantMarker() {
+    // 小番茄勾选「兼容原版」时不写末行标识
+    return !(els.mode.value === 'tomato' && els.compatLegacy && els.compatLegacy.checked);
   }
 
   els.mode.addEventListener('change', () => { applyModeUi(); saveParams(); });
@@ -163,10 +175,16 @@
     if (els.mode.value === 'tomato') els.seed.value = els.seed.value.replace(/\D/g, '').slice(0, 4);
     saveParams();
   });
+  if (els.compatLegacy) {
+    els.compatLegacy.addEventListener('change', saveParams);
+  }
 
   (function initParams() {
     const mode = localStorage.getItem('imgobf.mode');
     if (mode && HINTS[mode]) els.mode.value = mode;
+    if (els.compatLegacy) {
+      els.compatLegacy.checked = localStorage.getItem('imgobf.compatLegacy') === '1';
+    }
     applyModeUi();
     const saved = localStorage.getItem('imgobf.seed.' + els.mode.value);
     if (saved != null) els.seed.value = saved;
@@ -226,21 +244,17 @@
       els.res.height = 0;
       els.metaRes.textContent = '';
 
-      // 末行可逆标识：有则自动填入方式（及能写入的种子）
+      // 末行标识：只自动填方式；密码仍靠用户输入或本地记忆
+      state.loadedMarker = null;
       let markerNote = '';
       if (typeof ImgObf !== 'undefined' && ImgObf.inspect) {
         const info = ImgObf.inspect(data, w, h);
         if (info && info.mode) {
+          state.loadedMarker = info;
           els.mode.value = info.mode;
           applyModeUi();
-          if (info.hasSeed) {
-            els.seed.value = info.seed;
-            if (info.mode === 'tomato' && !/^\d{4}$/.test(els.seed.value)) els.seed.value = '0000';
-          }
           saveParams();
-          markerNote = info.hasSeed
-            ? '检测到混淆标识，已自动填入方式与密码。'
-            : '检测到混淆标识，已自动填入方式（密码需手动确认）。';
+          markerNote = '检测到混淆标识，已自动填入方式；请确认密码后点「还原」。';
         }
       }
 
@@ -248,10 +262,10 @@
       syncActions();
       setStatus(
         markerNote
-          ? ('已载入 ' + label + '（' + w + '×' + h + '）。' + markerNote + '可直接点「还原」。')
+          ? ('已载入 ' + label + '（' + w + '×' + h + '）。' + markerNote)
           : ('已载入 ' + label + '（' + w + '×' + h + '）。选好方式与密码后点「混淆」。')
       );
-      (markerNote ? els.rest : els.obf).focus();
+      (markerNote ? els.seed : els.obf).focus();
     } catch (e) {
       console.error(e);
       setStatus('读取失败：' + (e && e.message ? e.message : e), 'err');
@@ -293,6 +307,7 @@
     try {
       out = ImgObf.process({
         mode: mode, dir: dir, seed: seed,
+        marker: dir === 'encrypt' ? wantMarker() : undefined,
         data: state.cur.data, width: state.cur.w, height: state.cur.h
       });
     } catch (e) {
@@ -335,8 +350,18 @@
       ' · ' + (ms / 1000).toFixed(2) + ' 秒';
     let kind = '';
 
-    if (dir === 'decrypt' && state.src) {
-      if (state.src.w === out.width && state.src.h === out.height) {
+    if (dir === 'encrypt' && !wantMarker() && mode === 'tomato') {
+      msg += ' · 已按兼容原版输出（无末行标识）';
+    }
+
+    if (dir === 'decrypt') {
+      // 重新导入的密图：state.src 是密图尺寸；有标识时跳过与「原图」比对
+      const usedMarker = !!(out.marker || state.loadedMarker);
+      if (usedMarker) {
+        msg = '已还原（方式来自标识）· ' + out.width + '×' + out.height +
+          ' · ' + (ms / 1000).toFixed(2) + ' 秒';
+        kind = 'ok';
+      } else if (state.src && state.src.w === out.width && state.src.h === out.height) {
         const diff = countDiffPixels(state.src.data, out.data, out.width * out.height);
         if (diff === 0) {
           msg += ' · ✓ 与原图逐像素一致';
@@ -345,8 +370,6 @@
           msg += ' · ✗ 与原图有 ' + diff + ' 个像素不同（方式或密码不对，或图片中途被压缩过）';
           kind = 'err';
         }
-      } else {
-        msg += ' · 尺寸与原图不同（' + state.src.w + '×' + state.src.h + '）';
       }
     }
     setStatus(msg, kind);
@@ -381,6 +404,7 @@
     state.cur = null;
     state.name = '';
     state.fileLabel = '';
+    state.loadedMarker = null;
     els.file.value = '';
     els.metaOrig.textContent = '';
     els.metaRes.textContent = '';

@@ -6,8 +6,8 @@
 <meta name="description" content="纯前端图片混淆与还原工具，图片只在浏览器本地处理，不上传服务器。">
 <title>图片混淆 · 猫猫工具站</title>
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
-<link rel="stylesheet" href="base.css?v=2.2.0">
-<link rel="stylesheet" href="tool.css?v=2.2.0">
+<link rel="stylesheet" href="base.css?v=2.4.0">
+<link rel="stylesheet" href="tool.css?v=2.4.0">
 <script>
 	// 渲染前应用主题，避免闪烁（与站点其它页面一致）
 	(function () {
@@ -44,7 +44,7 @@
 	<div class="panel">
 		<label>混淆方式
 			<select id="mode">
-				<option value="tomato">小番茄（Gilbert 曲线，兼容原版）</option>
+				<option value="tomato">小番茄（Gilbert 曲线）</option>
 				<option value="serpentine">蛇形扫描</option>
 				<option value="blocks">分块打乱</option>
 				<option value="rows">行列错位</option>
@@ -55,6 +55,10 @@
 			<input id="seed" type="text" value="0000" autocomplete="off" spellcheck="false">
 		</label>
 	</div>
+	<label id="compat-wrap" class="check" hidden>
+		<input id="compat-legacy" type="checkbox">
+		兼容原版小番茄（不写末行标识，可被原版工具解开）
+	</label>
 	<p id="hint" class="hint"></p>
 </section>
 
@@ -89,8 +93,8 @@
 	<ul>
 		<li><strong>混淆不是加密。</strong>拿到同一工具、猜对方式与密码的人都能还原。它只防「随手点开就看到」和机器直接读图。</li>
 		<li><strong>只能用 PNG 或原始文件传。</strong>微信、QQ 等会重新压缩图片，像素一旦被改动就再也解不回来。</li>
-		<li><strong>还原时必须选对方式和密码。</strong>选错不会报错，只会得到一张看不懂的图。</li>
-		<li><strong>小番茄密码</strong>是 4 位数字：前两位迭代轮数，第 3 位右侧填充列，第 4 位下侧填充行。默认 <code>0000</code> 与原版小番茄一致，混淆出的图可被原版工具解开。</li>
+		<li><strong>还原时必须选对方式和密码。</strong>选错不会报错，只会得到一张看不懂的图。末行标识只会自动填方式，密码不会写进图里。</li>
+		<li><strong>小番茄密码</strong>是 4 位数字：前两位迭代轮数，第 3 位右侧填充列，第 4 位下侧填充行。默认会追加末行标识；若要与原版小番茄工具互通，请勾选「兼容原版」。</li>
 		<li>其他四种方式用任意文字作种子，留空则使用默认种子；这四种只保证本工具自己往返一致。</li>
 		<li>透明像素的 RGB 值可能被浏览器画布丢弃，带透明通道的图还原后透明区颜色可能有差异。</li>
 		<li>超大图（超过 2400 万像素）不支持。</li>
@@ -124,7 +128,7 @@
 		sync();
 	})();
 </script>
-<script src="algo.js?v=2.3.0"></script>
-<script src="app.js?v=2.3.0"></script>
+<script src="algo.js?v=2.4.0"></script>
+<script src="app.js?v=2.4.0"></script>
 </body>
 </html>
