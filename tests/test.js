@@ -23,7 +23,8 @@ for (const f of fs.readdirSync(inDir).filter(f => f.endsWith('.json'))) {
   const raw = new Uint8Array(fs.readFileSync(path.join(inDir, meta.raw)));
   const w = meta.w, h = meta.h;
   for (const pw of ['0000', '1234']) {
-    const enc = A.process({ mode: 'tomato', dir: 'encrypt', seed: pw, data: raw, width: w, height: h });
+    // 与原版小番茄互通：关闭末行标识
+    const enc = A.process({ mode: 'tomato', dir: 'encrypt', seed: pw, data: raw, width: w, height: h, marker: false });
     const refEnc = new Uint8Array(fs.readFileSync(path.join(refDir, `${f.slice(0, -5)}.${pw}.enc.raw`)));
     check(eq(enc.data, refEnc), `tomato encrypt vs ref ${w}x${h} pw=${pw}`);
     check(enc.width === w + Number(pw[2]) && enc.height === h + Number(pw[3]), `padded size ${w}x${h} pw=${pw}`);
@@ -72,7 +73,50 @@ console.log('2) roundtrip all modes: done');
 }
 console.log('3) wrong-params guard: done');
 
-// ---- 4. 大图耗时 / 内存 ----
+// ---- 4. 末行可逆标识：写入 / 识别 / 自动填参 / 无标识兼容 ----
+{
+  const w = 64, h = 48;
+  const raw = new Uint8Array(w * h * 4);
+  for (let i = 0; i < raw.length; i++) raw[i] = (i * 17 + 3) & 255;
+  for (let i = 3; i < raw.length; i += 4) raw[i] = 255;
+
+  for (const mode of modes) {
+    const seed = mode === 'tomato' ? '1234' : 'auto-seed-测试';
+    const enc = A.process({ mode, dir: 'encrypt', seed, data: raw, width: w, height: h });
+    check(enc.height === h + (mode === 'tomato' ? Number(seed[3]) : 0) + 1, `marker grows height ${mode}`);
+    const info = A.inspect(enc.data, enc.width, enc.height);
+    check(!!info, `inspect finds marker ${mode}`);
+    check(info && info.mode === mode, `inspect mode ${mode}`);
+    check(info && info.hasSeed && info.seed === seed, `inspect seed ${mode}`);
+
+    // 不传 mode，靠标识自动识别
+    const decAuto = A.process({ mode: 'auto', dir: 'decrypt', seed: '', data: enc.data, width: enc.width, height: enc.height });
+    check(decAuto.width === w && decAuto.height === h, `auto-mode size ${mode}`);
+    check(eq(decAuto.data, raw), `auto-mode roundtrip ${mode}`);
+
+    // 无标识旧图：inspect 为 null，手动模式仍可解
+    const legacy = A.process({ mode, dir: 'encrypt', seed, data: raw, width: w, height: h, marker: false });
+    check(A.inspect(legacy.data, legacy.width, legacy.height) == null, `no marker when disabled ${mode}`);
+    const decLegacy = A.process({ mode, dir: 'decrypt', seed, data: legacy.data, width: legacy.width, height: legacy.height });
+    check(eq(decLegacy.data, raw), `legacy roundtrip ${mode}`);
+  }
+
+  // 极窄图写不下完整种子时仍应写入模式
+  {
+    const nw = 4, nh = 8;
+    const tiny = new Uint8Array(nw * nh * 4);
+    for (let i = 0; i < tiny.length; i++) tiny[i] = i & 255;
+    for (let i = 3; i < tiny.length; i += 4) tiny[i] = 255;
+    const longSeed = 'x'.repeat(80);
+    const enc = A.process({ mode: 'xor', dir: 'encrypt', seed: longSeed, data: tiny, width: nw, height: nh });
+    const info = A.inspect(enc.data, enc.width, enc.height);
+    check(info && info.mode === 'xor', 'narrow image still stores mode');
+    check(info && !info.hasSeed, 'narrow image drops oversized seed');
+  }
+}
+console.log('4) marker inspect/auto: done');
+
+// ---- 5. 大图耗时 / 内存 ----
 {
   const w = 1920, h = 1080;
   const raw = new Uint8Array(w * h * 4);
