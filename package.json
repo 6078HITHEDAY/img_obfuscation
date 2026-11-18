@@ -1,0 +1,10 @@
+{
+  "name": "img-obfuscation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "纯前端图片混淆 / 还原工具（小番茄、蛇形扫描、分块打乱、行列错位、像素扰动）",
+  "scripts": {
+    "serve": "python3 -m http.server 8080",
+    "test": "bash tests/verify.sh"
+  }
+}
