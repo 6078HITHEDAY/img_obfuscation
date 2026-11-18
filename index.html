@@ -6,8 +6,8 @@
 <meta name="description" content="纯前端图片混淆与还原工具，图片只在浏览器本地处理，不上传服务器。">
 <title>图片混淆 · 猫猫工具站</title>
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
-<link rel="stylesheet" href="base.css?v=2.1.0">
-<link rel="stylesheet" href="tool.css?v=2.1.0">
+<link rel="stylesheet" href="base.css?v=2.2.0">
+<link rel="stylesheet" href="tool.css?v=2.2.0">
 <script>
 	// 渲染前应用主题，避免闪烁（与站点其它页面一致）
 	(function () {
@@ -28,7 +28,10 @@
 <p class="lead">把图片打乱成看不出内容的杂色，需要时再用同样的参数还原。全部运算在你的浏览器里完成，图片不会上传到任何服务器。</p>
 
 <section class="stage stage-upload" aria-labelledby="upload-label">
-	<h2 id="upload-label" class="stage-title">放入图片</h2>
+	<div class="stage-head">
+		<h2 id="upload-label" class="stage-title">1. 放入图片</h2>
+		<button id="btn-reset" class="act act-inline" type="button" hidden>换一张</button>
+	</div>
 	<div id="drop" class="drop" tabindex="0" role="button" aria-label="选择图片">
 		<strong>把图片拖到这里</strong>
 		<span>也可以点击选择，或按 Ctrl / ⌘ + V 粘贴截图</span>
@@ -37,7 +40,7 @@
 </section>
 
 <section class="stage stage-params" aria-labelledby="params-label">
-	<h2 id="params-label" class="stage-title">方式与密码</h2>
+	<h2 id="params-label" class="stage-title">2. 方式与密码</h2>
 	<div class="panel">
 		<label>混淆方式
 			<select id="mode">
@@ -56,18 +59,17 @@
 </section>
 
 <section class="stage stage-run" aria-labelledby="run-label">
-	<h2 id="run-label" class="stage-title">处理</h2>
+	<h2 id="run-label" class="stage-title">3. 处理</h2>
 	<div class="actions">
-		<button id="btn-obf" class="act primary" disabled>混淆</button>
-		<button id="btn-rest" class="act" disabled>还原</button>
-		<button id="btn-reset" class="act" hidden>换一张</button>
+		<button id="btn-obf" class="act primary" type="button" disabled title="请先放入图片">混淆</button>
+		<button id="btn-rest" class="act" type="button" disabled title="请先放入图片">还原</button>
 	</div>
 	<p id="status" class="status" aria-live="polite">把图片拖进来，或点击选择。</p>
 </section>
 
-<section class="stage stage-result" aria-labelledby="result-label">
-	<h2 id="result-label" class="stage-title">结果</h2>
-	<div class="compare" id="compare" hidden>
+<section class="stage stage-result" id="result-stage" hidden aria-labelledby="result-label">
+	<h2 id="result-label" class="stage-title">4. 结果</h2>
+	<div class="compare" id="compare">
 		<figure>
 			<figcaption>原图 <span id="meta-orig"></span></figcaption>
 			<canvas id="cv-orig"></canvas>
@@ -77,9 +79,8 @@
 			<canvas id="cv-res"></canvas>
 		</figure>
 	</div>
-
-	<div class="actions" id="dl-wrap" hidden>
-		<button id="btn-dl" class="act primary">下载 PNG</button>
+	<div class="actions" id="dl-wrap">
+		<button id="btn-dl" class="act primary" type="button">下载 PNG</button>
 	</div>
 </section>
 
@@ -123,7 +124,7 @@
 		sync();
 	})();
 </script>
-<script src="algo.js?v=2.1.0"></script>
-<script src="app.js?v=2.1.0"></script>
+<script src="algo.js?v=2.2.0"></script>
+<script src="app.js?v=2.2.0"></script>
 </body>
 </html>

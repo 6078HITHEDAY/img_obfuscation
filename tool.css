@@ -4,9 +4,13 @@
 
 body { max-width: 960px; }
 
-.lead { color: var(--text-muted); }
+.lead { color: var(--text-muted); margin-bottom: 1.6rem; }
 
 /* 轻量分区标题：不改变原简洁观感 */
+.stage {
+	margin-bottom: 1.35rem;
+}
+
 .stage-title {
 	font-size: 0.85rem;
 	font-weight: 600;
@@ -14,12 +18,15 @@ body { max-width: 960px; }
 	margin: 0 0 0.55rem;
 }
 
-.stage { margin-bottom: 0.25rem; }
-
-/* 有图才显示结果区标题 */
-.stage-result:not(:has(#compare:not([hidden]))) {
-	display: none;
+.stage-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	margin-bottom: 0.55rem;
 }
+
+.stage-head .stage-title { margin-bottom: 0; }
 
 /* 拖放区 */
 .drop {
@@ -29,7 +36,7 @@ body { max-width: 960px; }
 	justify-content: center;
 	gap: .3rem;
 	padding: 2.2rem 1rem;
-	margin-bottom: 1.5rem;
+	margin-bottom: 0;
 	border: 2px dashed var(--quote-border);
 	border-radius: 10px;
 	color: var(--text-muted);
@@ -39,11 +46,24 @@ body { max-width: 960px; }
 }
 .drop strong { color: var(--text); font-weight: 600; }
 .drop span { font-size: .85rem; }
-.drop:hover, .drop.over { border-color: var(--link); color: var(--text); }
+.drop:hover, .drop.over, .drop:focus-visible {
+	border-color: var(--link);
+	color: var(--text);
+	outline: none;
+}
 .drop.over { background: rgba(0, 102, 204, .05); }
+.drop.has-file {
+	border-style: solid;
+	border-color: var(--quote-border);
+	padding: 1.2rem 1rem;
+}
+.drop.has-file:hover, .drop.has-file.over { border-color: var(--link); }
+.drop.loading { opacity: .7; cursor: wait; }
+.drop.busy { cursor: wait; opacity: .85; }
+.drop[aria-disabled="true"] { pointer-events: none; }
 
 /* 参数 */
-.panel { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: .6rem; }
+.panel { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: .55rem; }
 .panel label { display: flex; flex-direction: column; gap: .35rem; font-size: .85rem; color: var(--text-muted); flex: 1 1 200px; }
 .panel select, .panel input {
 	font: inherit;
@@ -55,10 +75,11 @@ body { max-width: 960px; }
 	width: 100%;
 }
 .panel select:focus, .panel input:focus { outline: none; border-color: var(--link); }
-.hint { font-size: .8rem; color: var(--text-faint); margin-bottom: 1.2rem; }
+.panel select:disabled, .panel input:disabled { opacity: .55; cursor: default; }
+.hint { font-size: .8rem; color: var(--text-faint); margin-bottom: 0; min-height: 1.2em; }
 
 /* 按钮 */
-.actions { display: flex; flex-wrap: wrap; gap: .7rem; margin-bottom: 1rem; }
+.actions { display: flex; flex-wrap: wrap; gap: .7rem; margin-bottom: 0.65rem; }
 button.act {
 	font: inherit;
 	padding: .6rem 1.6rem;
@@ -69,19 +90,23 @@ button.act {
 	color: var(--text);
 	transition: border-color .2s, opacity .2s;
 }
+button.act-inline {
+	padding: .3rem .75rem;
+	font-size: .85rem;
+}
 button.act:hover:not(:disabled) { border-color: var(--link); }
 button.act.primary { background: var(--link); border-color: var(--link); color: #fff; }
 html[data-theme="dark"] button.act.primary { color: #111; }
 button.act:disabled { opacity: .45; cursor: default; }
 
 /* 状态 */
-.status { min-height: 1.5em; font-size: .88rem; color: var(--text-muted); margin-bottom: 1rem; }
+.status { min-height: 1.5em; font-size: .88rem; color: var(--text-muted); margin-bottom: 0; }
 .status.ok { color: var(--ok); }
 .status.err { color: var(--err); }
 .status.busy { color: var(--text-muted); }
 
 /* 对比 */
-.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 0.85rem; }
 @media (max-width: 700px) { .compare { grid-template-columns: 1fr; } }
 .compare figure { margin: 0; min-width: 0; }
 .compare figcaption { font-size: .8rem; color: var(--text-muted); margin-bottom: .4rem; }
@@ -97,7 +122,7 @@ button.act:disabled { opacity: .45; cursor: default; }
 }
 
 /* 说明 */
-details.notes { font-size: .85rem; color: var(--text-muted); margin: 2rem 0 0; }
+details.notes { font-size: .85rem; color: var(--text-muted); margin: 1.75rem 0 0; }
 details.notes summary { cursor: pointer; color: var(--text); }
 details.notes ul { margin: .6rem 0 0 1.2rem; }
 details.notes li { margin-bottom: .35rem; }
