@@ -73,7 +73,7 @@ console.log('2) roundtrip all modes: done');
 }
 console.log('3) wrong-params guard: done');
 
-// ---- 4. 末行可逆标识：写入 / 识别 / 自动填参 / 无标识兼容 ----
+// ---- 4. 末行可逆标识：只存模式、不存种子 / 自动识别 / 无标识兼容 ----
 {
   const w = 64, h = 48;
   const raw = new Uint8Array(w * h * 4);
@@ -87,12 +87,15 @@ console.log('3) wrong-params guard: done');
     const info = A.inspect(enc.data, enc.width, enc.height);
     check(!!info, `inspect finds marker ${mode}`);
     check(info && info.mode === mode, `inspect mode ${mode}`);
-    check(info && info.hasSeed && info.seed === seed, `inspect seed ${mode}`);
+    check(info && info.seed == null && info.hasSeed == null, `inspect never exposes seed ${mode}`);
 
-    // 不传 mode，靠标识自动识别
-    const decAuto = A.process({ mode: 'auto', dir: 'decrypt', seed: '', data: enc.data, width: enc.width, height: enc.height });
-    check(decAuto.width === w && decAuto.height === h, `auto-mode size ${mode}`);
-    check(eq(decAuto.data, raw), `auto-mode roundtrip ${mode}`);
+    // 标识里没有种子：空种子不能靠 auto 解开（非空默认种子的模式除外）
+    const decNeedSeed = A.process({
+      mode: 'auto', dir: 'decrypt', seed, data: enc.data, width: enc.width, height: enc.height
+    });
+    check(decNeedSeed.width === w && decNeedSeed.height === h, `auto-mode size ${mode}`);
+    check(eq(decNeedSeed.data, raw), `auto-mode + user seed roundtrip ${mode}`);
+    check(!!decNeedSeed.marker && decNeedSeed.marker.mode === mode, `decrypt returns marker meta ${mode}`);
 
     // 无标识旧图：inspect 为 null，手动模式仍可解
     const legacy = A.process({ mode, dir: 'encrypt', seed, data: raw, width: w, height: h, marker: false });
@@ -101,17 +104,16 @@ console.log('3) wrong-params guard: done');
     check(eq(decLegacy.data, raw), `legacy roundtrip ${mode}`);
   }
 
-  // 极窄图写不下完整种子时仍应写入模式
+  // 极窄图（宽=4）仍应能写入仅含模式的标识
   {
     const nw = 4, nh = 8;
     const tiny = new Uint8Array(nw * nh * 4);
     for (let i = 0; i < tiny.length; i++) tiny[i] = i & 255;
     for (let i = 3; i < tiny.length; i += 4) tiny[i] = 255;
-    const longSeed = 'x'.repeat(80);
-    const enc = A.process({ mode: 'xor', dir: 'encrypt', seed: longSeed, data: tiny, width: nw, height: nh });
+    const enc = A.process({ mode: 'xor', dir: 'encrypt', seed: 'secret', data: tiny, width: nw, height: nh });
     const info = A.inspect(enc.data, enc.width, enc.height);
     check(info && info.mode === 'xor', 'narrow image still stores mode');
-    check(info && !info.hasSeed, 'narrow image drops oversized seed');
+    check(info && info.seed == null, 'marker never stores seed');
   }
 }
 console.log('4) marker inspect/auto: done');
