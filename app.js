@@ -278,12 +278,20 @@
 
   /* ---------- 执行 ---------- */
 
+  // 混淆：始终对载入的原始图（state.src）重跑，换方式 = 换参数重新加密，不叠在密图上。
+  // 还原：基于当前图（state.cur，通常是上一次混淆结果或新拖入的密图）。
+  function inputFor(dir) {
+    if (dir === 'encrypt') return state.src;
+    return state.cur;
+  }
+
   async function run(dir) {
     if (busy.value) {
       setStatus('正在处理中，请稍候。', 'busy');
       return;
     }
-    if (!state.cur) {
+    const input = inputFor(dir);
+    if (!input) {
       setStatus('请先放入图片，再点混淆或还原。', 'err');
       els.drop.focus();
       return;
@@ -308,7 +316,7 @@
       out = ImgObf.process({
         mode: mode, dir: dir, seed: seed,
         marker: dir === 'encrypt' ? wantMarker() : undefined,
-        data: state.cur.data, width: state.cur.w, height: state.cur.h
+        data: input.data, width: input.w, height: input.h
       });
     } catch (e) {
       console.error(e);

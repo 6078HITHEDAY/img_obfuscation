@@ -118,7 +118,29 @@ console.log('3) wrong-params guard: done');
 }
 console.log('4) marker inspect/auto: done');
 
-// ---- 5. 大图耗时 / 内存 ----
+// ---- 5. 换方式应对原图重加密（勿叠在密图上）----
+{
+  const w = 48, h = 32;
+  const raw = new Uint8Array(w * h * 4);
+  for (let i = 0; i < raw.length; i++) raw[i] = (i * 41 + 9) & 255;
+  for (let i = 3; i < raw.length; i += 4) raw[i] = 255;
+
+  const encA = A.process({ mode: 'xor', dir: 'encrypt', seed: 'a', data: raw, width: w, height: h });
+  const encB = A.process({ mode: 'rows', dir: 'encrypt', seed: 'b', data: raw, width: w, height: h });
+  // 错误路径：在 A 的密图上再跑 B（UI 若用 state.cur 就会这样）
+  const stacked = A.process({
+    mode: 'rows', dir: 'encrypt', seed: 'b',
+    data: encA.data, width: encA.width, height: encA.height
+  });
+  check(!eq(encA.data, encB.data), 'mode A vs B on raw differ');
+  check(!eq(encB.data, stacked.data), 'B-on-raw differs from B-on-ciphertext (UI must use src)');
+  // 同一原图连续两次不同模式：结果都应相对原图有变化
+  check(!eq(encA.data.subarray(0, raw.length), raw), 'A changes raw');
+  check(!eq(encB.data.subarray(0, raw.length), raw), 'B changes raw');
+}
+console.log('5) re-obfuscate from original: done');
+
+// ---- 6. 大图耗时 / 内存 ----
 {
   const w = 1920, h = 1080;
   const raw = new Uint8Array(w * h * 4);
