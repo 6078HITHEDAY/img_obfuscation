@@ -10,7 +10,7 @@
   const els = {
     drop: $('drop'), file: $('file'), mode: $('mode'), seed: $('seed'), hint: $('hint'),
     obf: $('btn-obf'), rest: $('btn-rest'), reset: $('btn-reset'),
-    status: $('status'), compare: $('compare'),
+    status: $('status'), resultStage: $('result-stage'), compare: $('compare'),
     orig: $('cv-orig'), res: $('cv-res'),
     metaOrig: $('meta-orig'), metaRes: $('meta-res'),
     dlWrap: $('dl-wrap'), dl: $('btn-dl')
@@ -20,7 +20,8 @@
     name: '',      // 原始文件名（不含扩展名）
     src: null,     // { data, w, h } 载入的原图
     cur: null,     // { data, w, h } 下一次操作的对象（可能是上一次的结果）
-    result: null   // { data, w, h, blob, url, mode, dir }
+    result: null,  // { data, w, h, blob, url, mode, dir }
+    fileLabel: ''
   };
 
   const busy = { value: false };
@@ -40,12 +41,39 @@
     els.status.className = 'status' + (kind ? ' ' + kind : '');
   }
 
+  function syncActions() {
+    const hasImage = !!state.cur;
+    const hasResult = !!state.result;
+    const isBusy = busy.value;
+
+    els.obf.disabled = isBusy || !hasImage;
+    els.rest.disabled = isBusy || !hasImage;
+    els.dl.disabled = isBusy || !hasResult;
+    els.reset.disabled = isBusy;
+    els.mode.disabled = isBusy;
+    els.seed.disabled = isBusy;
+    els.file.disabled = isBusy;
+
+    els.obf.title = !hasImage ? '请先放入图片' : (isBusy ? '正在处理…' : '按当前方式与密码混淆');
+    els.rest.title = !hasImage ? '请先放入图片' : (isBusy ? '正在处理…' : '按当前方式与密码还原');
+    els.dl.title = !hasResult ? '请先完成混淆或还原' : '下载处理后的 PNG';
+    els.reset.title = isBusy ? '正在处理…' : '清除当前图片，重新选择';
+
+    els.obf.textContent = isBusy && busy.label === 'obf' ? '处理中…' : '混淆';
+    els.rest.textContent = isBusy && busy.label === 'rest' ? '处理中…' : '还原';
+
+    els.reset.hidden = !hasImage;
+    els.resultStage.hidden = !hasResult;
+    els.drop.classList.toggle('has-file', hasImage);
+    els.drop.classList.toggle('busy', isBusy);
+    els.drop.setAttribute('aria-disabled', isBusy ? 'true' : 'false');
+  }
+
   function setBusy(value, label) {
     busy.value = value;
-    els.obf.disabled = value || !state.cur;
-    els.rest.disabled = value || !state.cur;
-    els.obf.textContent = value && label === 'obf' ? '处理中…' : '混淆';
-    els.rest.textContent = value && label === 'rest' ? '处理中…' : '还原';
+    busy.label = value ? label : '';
+    syncActions();
+    if (value) setStatus(label === 'obf' ? '正在混淆…' : (label === 'rest' ? '正在还原…' : '处理中…'), 'busy');
   }
 
   function canvasFrom(data, w, h) {
@@ -73,6 +101,30 @@
   function releaseResult() {
     if (state.result && state.result.url) URL.revokeObjectURL(state.result.url);
     state.result = null;
+  }
+
+  function syncDropLabel(hasImage, fileName) {
+    const strong = els.drop.querySelector('strong');
+    const span = els.drop.querySelector('span');
+    if (!strong || !span) return;
+    if (hasImage) {
+      strong.textContent = fileName ? ('已载入 ' + fileName) : '已载入图片';
+      span.textContent = '可继续换图：拖入、点选或粘贴；或点右上角「换一张」';
+    } else {
+      strong.textContent = '把图片拖到这里';
+      span.textContent = '也可以点击选择，或按 Ctrl / ⌘ + V 粘贴截图';
+    }
+  }
+
+  function pickImageFile(fileList) {
+    if (!fileList || !fileList.length) return null;
+    for (let i = 0; i < fileList.length; i++) {
+      const f = fileList[i];
+      if (f && (/^image\//.test(f.type) || /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(f.name || ''))) {
+        return f;
+      }
+    }
+    return null;
   }
 
   /* ---------- 参数提示 / 记忆 ---------- */
@@ -119,18 +171,28 @@
     const saved = localStorage.getItem('imgobf.seed.' + els.mode.value);
     if (saved != null) els.seed.value = saved;
     if (els.mode.value === 'tomato' && !/^\d{4}$/.test(els.seed.value)) els.seed.value = '0000';
+    syncActions();
   })();
 
   /* ---------- 载入图片 ---------- */
 
   async function loadFile(file) {
-    if (!file) return;
-    if (!/^image\//.test(file.type)) {
-      setStatus('这不是图片文件。', 'err');
+    if (!file) {
+      setStatus('没有读到文件，请重新拖入或选择图片。', 'err');
+      return;
+    }
+    if (busy.value) {
+      setStatus('正在处理中，请稍后再换图。', 'err');
+      return;
+    }
+    if (file.type && !/^image\//.test(file.type)) {
+      setStatus('这不是图片文件（' + (file.type || '未知类型') + '）。', 'err');
       return;
     }
 
-    setStatus('正在读取 ' + file.name + ' …');
+    const label = file.name || '粘贴的图片';
+    setStatus('正在读取 ' + label + ' …', 'busy');
+    els.drop.classList.add('loading');
     const url = URL.createObjectURL(file);
     try {
       const img = new Image();
@@ -152,27 +214,28 @@
       const data = ctx.getImageData(0, 0, w, h).data;
 
       releaseResult();
-      state.name = (file.name || 'image').replace(/\.[^.]+$/, '');
+      state.name = (file.name || 'image').replace(/\.[^.]+$/, '') || 'image';
+      state.fileLabel = label;
       state.src = { data: data, w: w, h: h };
       state.cur = state.src;
 
+      // 预画原图，等有处理结果后再展示结果区
       drawPreview(els.orig, data, w, h);
       els.metaOrig.textContent = w + '×' + h + ' · ' + fmtSize(file.size);
-
-      els.compare.hidden = false;
       els.res.width = 0;
       els.res.height = 0;
-      els.res.hidden = true;
       els.metaRes.textContent = '';
-      els.dlWrap.hidden = true;
-      els.reset.hidden = false;
 
-      setBusy(false);
-      setStatus('已载入 ' + file.name + '，选择方式和密码后点「混淆」。');
+      syncDropLabel(true, label);
+      syncActions();
+      setStatus('已载入 ' + label + '（' + w + '×' + h + '）。选好方式与密码后点「混淆」。');
+      els.obf.focus();
     } catch (e) {
       console.error(e);
       setStatus('读取失败：' + (e && e.message ? e.message : e), 'err');
+      syncActions();
     } finally {
+      els.drop.classList.remove('loading');
       URL.revokeObjectURL(url);
     }
   }
@@ -180,18 +243,26 @@
   /* ---------- 执行 ---------- */
 
   async function run(dir) {
-    if (busy.value || !state.cur) return;
+    if (busy.value) {
+      setStatus('正在处理中，请稍候。', 'busy');
+      return;
+    }
+    if (!state.cur) {
+      setStatus('请先放入图片，再点混淆或还原。', 'err');
+      els.drop.focus();
+      return;
+    }
 
     const mode = els.mode.value;
     const seed = els.seed.value;
 
     if (mode === 'tomato' && !/^\d{4}$/.test(seed || '0000')) {
       setStatus('小番茄密码必须是 4 位数字，例如 0000。', 'err');
+      els.seed.focus();
       return;
     }
 
     setBusy(true, dir === 'encrypt' ? 'obf' : 'rest');
-    setStatus(dir === 'encrypt' ? '正在混淆…' : '正在还原…');
     await tick();
     await tick();
 
@@ -216,8 +287,11 @@
       blob = await new Promise((res, rej) => canvas.toBlob(
         (b) => (b ? res(b) : rej(new Error('导出 PNG 失败'))), 'image/png'
       ));
+      if (state.src) {
+        drawPreview(els.orig, state.src.data, state.src.w, state.src.h);
+        els.metaOrig.textContent = state.src.w + '×' + state.src.h;
+      }
       drawPreview(els.res, out.data, out.width, out.height);
-      els.res.hidden = false;
     } catch (e) {
       console.error(e);
       setStatus('失败：' + (e && e.message ? e.message : e), 'err');
@@ -233,8 +307,6 @@
     state.cur = { data: out.data, w: out.width, h: out.height };
 
     els.metaRes.textContent = out.width + '×' + out.height + ' · ' + fmtSize(blob.size);
-    els.dlWrap.hidden = false;
-    els.reset.hidden = false;
     setBusy(false);
 
     let msg = (dir === 'encrypt' ? '混淆完成' : '还原完成') + ' · ' + out.width + '×' + out.height +
@@ -256,13 +328,17 @@
       }
     }
     setStatus(msg, kind);
+    els.dl.focus();
   }
 
   els.obf.addEventListener('click', () => run('encrypt'));
   els.rest.addEventListener('click', () => run('decrypt'));
 
   els.dl.addEventListener('click', () => {
-    if (!state.result) return;
+    if (!state.result) {
+      setStatus('还没有可下载的结果，请先混淆或还原。', 'err');
+      return;
+    }
     const a = document.createElement('a');
     a.href = state.result.url;
     a.download = (state.name || 'image') + '-' + state.result.mode + '-' +
@@ -270,28 +346,54 @@
     document.body.appendChild(a);
     a.click();
     a.remove();
+    setStatus('已开始下载 PNG。');
   });
 
   els.reset.addEventListener('click', () => {
+    if (busy.value) {
+      setStatus('正在处理中，请稍后再换图。', 'err');
+      return;
+    }
     releaseResult();
     state.src = null;
     state.cur = null;
-    els.compare.hidden = true;
-    els.dlWrap.hidden = true;
-    els.reset.hidden = true;
+    state.name = '';
+    state.fileLabel = '';
     els.file.value = '';
-    setBusy(false);
-    setStatus('把图片拖进来，或点击选择。');
+    els.metaOrig.textContent = '';
+    els.metaRes.textContent = '';
+    els.orig.width = 0;
+    els.orig.height = 0;
+    els.res.width = 0;
+    els.res.height = 0;
+    syncDropLabel(false);
+    syncActions();
+    setStatus('已清除。把图片拖进来，或点击选择。');
+    els.drop.focus();
   });
 
   /* ---------- 拖拽 / 选择 / 粘贴 ---------- */
 
-  els.drop.addEventListener('click', () => els.file.click());
+  els.drop.addEventListener('click', () => {
+    if (busy.value) {
+      setStatus('正在处理中，请稍后再选图。', 'err');
+      return;
+    }
+    els.file.click();
+  });
   els.drop.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); els.file.click(); }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (busy.value) {
+        setStatus('正在处理中，请稍后再选图。', 'err');
+        return;
+      }
+      els.file.click();
+    }
   });
   els.file.addEventListener('change', () => {
     if (els.file.files && els.file.files[0]) loadFile(els.file.files[0]);
+    else setStatus('未选择文件。', 'err');
     els.file.value = '';
   });
 
@@ -299,7 +401,7 @@
   ['dragenter', 'dragover'].forEach((ev) => {
     document.addEventListener(ev, (e) => {
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
+      e.dataTransfer.dropEffect = busy.value ? 'none' : 'copy';
       if (ev === 'dragenter') dragDepth++;
       els.drop.classList.add('over');
     });
@@ -313,19 +415,36 @@
     e.preventDefault();
     dragDepth = 0;
     els.drop.classList.remove('over');
-    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (busy.value) {
+      setStatus('正在处理中，请稍后再拖入图片。', 'err');
+      return;
+    }
+    const f = pickImageFile(e.dataTransfer && e.dataTransfer.files);
     if (f) loadFile(f);
+    else setStatus('拖入的不是图片文件，请拖入 PNG / JPG 等图片。', 'err');
   });
 
   document.addEventListener('paste', (e) => {
     const items = e.clipboardData && e.clipboardData.items;
     if (!items) return;
+    let sawFile = false;
     for (let i = 0; i < items.length; i++) {
-      if (items[i].kind === 'file' && /^image\//.test(items[i].type)) {
-        e.preventDefault();
-        loadFile(items[i].getAsFile());
-        return;
+      if (items[i].kind === 'file') {
+        sawFile = true;
+        if (/^image\//.test(items[i].type)) {
+          e.preventDefault();
+          if (busy.value) {
+            setStatus('正在处理中，请稍后再粘贴。', 'err');
+            return;
+          }
+          loadFile(items[i].getAsFile());
+          return;
+        }
       }
+    }
+    if (sawFile) {
+      e.preventDefault();
+      setStatus('剪贴板里的文件不是图片。', 'err');
     }
   });
 })();

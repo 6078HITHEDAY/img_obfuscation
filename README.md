@@ -25,8 +25,8 @@ python3 -m http.server 8080
 ## 文件结构
 
 ```
-index.html      页面结构
-base.css        站点基础样式（深色模式变量、标题、页脚），与工具站 /style.css 一致
+index.html      页面结构（分区更清楚：放入 → 参数 → 处理 → 结果）
+base.css        站点基础样式（深色模式变量、标题、页脚）
 tool.css        本页样式（拖放区、参数、按钮、对比区）
 algo.js         算法核心：纯函数，不碰 DOM，Node 里也能直接 require
 app.js          页面交互：读图、画布、状态、下载
@@ -91,7 +91,7 @@ npm test          # 等价于 bash tests/verify.sh
 
 子路径部署（当前线上就是这样）：把本目录文件放到 `/var/www/tools/hunxiao/`，站点 root 指向 `/var/www/tools` 即可，nginx 片段见 `deploy/nginx-example.conf`。
 
-纯静态，没有进程要重启。改完前端后把 `index.html` 里三处 `?v=1.0.0`（`tool.css`、`algo.js`、`app.js`）一起升版本号，避免浏览器吃旧缓存。
+纯静态，没有进程要重启。改完前端后把 `index.html` 里四处 `?v=`（`base.css`、`tool.css`、`algo.js`、`app.js`）一起升版本号，避免浏览器吃旧缓存。
 
 ## 已知限制
 
